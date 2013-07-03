@@ -2,7 +2,6 @@ package main
 
 import "encoding/json"
 import "flag"
-import "fmt"
 import "github.com/mrjones/oauth"
 import "io"
 import "io/ioutil"
@@ -29,7 +28,9 @@ func main() {
 
   var err error
   if len(args) < 1 {
-    fmt.Printf("usage: %s <path to sync to>\n", os.Args[0])
+    print("usage: ")
+    print(os.Args[0])
+    println(" <path to sync to>")
     return
   }
 
@@ -76,8 +77,8 @@ func main() {
           p += strings.Replace(url.QueryEscape(rel), "%2F", "/", -1)
           r, err := c.Get(p, nil, token)
           ck(err)
-          os.MkdirAll(path.Dir(prefix + rel), 0755)
-          f, err := os.Create(prefix + rel)
+          os.MkdirAll(path.Dir(prefix + meta["path"].(string)), 0755)
+          f, err := os.Create(prefix + meta["path"].(string))
           ck(err)
           io.Copy(f, r.Body)
           f.Close()
@@ -148,7 +149,8 @@ func token(c *oauth.Consumer) *oauth.AccessToken {
   }
   token, login, err := c.GetRequestTokenAndUrl("")
   ck(err)
-  fmt.Printf("%s\nHit enter when authorized...", login)
+  println(login)
+  print("Hit enter when authorized...")
   _, err = os.Stdin.Read([]byte{0})
   ck(err)
   atoken, err = c.AuthorizeToken(token, "")
