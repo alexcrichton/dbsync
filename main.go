@@ -95,7 +95,11 @@ func main() {
   ck(err)
 
   if !updated { return }
-  exec.Command("/bin/sh", ".after-sync").Run()
+  f, err := os.Open(".after-sync")
+  if err != nil { return }
+  f.Close()
+
+  ck(exec.Command("/bin/sh", ".after-sync").Run())
 }
 
 func saveCursor(cursor string) {
