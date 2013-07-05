@@ -11,6 +11,7 @@ import "os/exec"
 import "path"
 import "path/filepath"
 import "strings"
+import "time"
 
 var prefix = ""
 
@@ -67,26 +68,37 @@ func main() {
       updated = true
       rel := arr[0].(string)
       meta, ok := arr[1].(map[string]interface{})
+      if verbose {
+        print("updating ", rel, "... ")
+      }
       if !ok {
         os.RemoveAll(prefix + rel)
       } else {
         if meta["is_dir"].(bool) {
           os.Mkdir(prefix + rel, 0755)
         } else {
-          p := "https://api-content.dropbox.com/1/files/sandbox"
-          p += strings.Replace(url.QueryEscape(rel), "%2F", "/", -1)
-          r, err := c.Get(p, nil, token)
-          ck(err)
-          os.MkdirAll(path.Dir(prefix + meta["path"].(string)), 0755)
-          f, err := os.Create(prefix + meta["path"].(string))
-          ck(err)
-          io.Copy(f, r.Body)
-          f.Close()
-          r.Body.Close()
+          dst := path.Join(prefix, meta["path"].(string))
+          if !synced(dst, meta) {
+            p := "https://api-content.dropbox.com/1/files/sandbox"
+            p += strings.Replace(url.QueryEscape(rel), "%2F", "/", -1)
+            r, err := c.Get(p, nil, token)
+            ck(err)
+            os.MkdirAll(path.Dir(dst), 0755)
+            f, err := os.Create(dst)
+            ck(err)
+            _, err = io.Copy(f, r.Body)
+            f.Close()
+            r.Body.Close()
+            ck(err)
+
+            set_mtime(dst, meta)
+          } else {
+            print("(already downloaded) ")
+          }
         }
       }
       if verbose {
-        println("updated ", rel)
+        println("done")
       }
     }
     saveCursor(delta.Cursor)
@@ -100,6 +112,27 @@ func main() {
   f.Close()
 
   ck(exec.Command("/bin/sh", ".after-sync").Run())
+}
+
+func synced(file string, meta map[string]interface{}) bool {
+  fi, err := os.Stat(file)
+  if err != nil { return false }
+  size := fi.Size()
+  mtime := fi.ModTime().Local()
+
+  meta_size := int64(meta["bytes"].(float64))
+  meta_mtime, err := time.Parse(time.RFC1123Z, meta["modified"].(string))
+  if err != nil { return false }
+  if size != meta_size { return false }
+  if mtime != meta_mtime.Local() { return false }
+  return true
+}
+
+func set_mtime(file string, meta map[string]interface{}) {
+  mtime, err := time.Parse(time.RFC1123Z, meta["modified"].(string))
+  ck(err)
+  err = os.Chtimes(file, mtime.Local(), mtime.Local())
+  ck(err)
 }
 
 func saveCursor(cursor string) {
